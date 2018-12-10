@@ -1,0 +1,260 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r, message=FALSE, warning=FALSE}
+library(mdsr)
+library(stringr)
+library(ggrepel)
+library(boot)
+```
+
+```{r}
+j = mean(X_LeagueofLegends$gamelength)
+paste("The average length of these games (in minutes) was: ", j, collapse = "")
+```
+#Baron only spawns starting at 20 mins in. After death it after 7 minutes
+
+```{r}
+#make a scatterplot of the game durations
+
+g_gameLengths <- ggplot(data = X_LeagueofLegends, aes(x = X_LeagueofLegends$gamelength) ) + geom_histogram(binwidth = 1.5)
+g_gameLengths
+
+```
+
+#First we must calculate the win ratio of each team
+```{r}
+#Step 1: Calculate/Tally each teams # of wins OR win ratio
+teamsGamesPlayed <- X_LeagueofLegends %>%
+  select(blueTeamTag, bResult, rResult, redTeamTag)
+  
+  View(teamsGamesPlayed)
+```
+
+```{r}
+#Isolate the unique names of the blue teams
+blueTeamsNames <- teamsGamesPlayed %>%
+  #df <- unique(teamsGamesPlayed$blueTeamTag)
+  group_by(blueTeamTag) %>%
+  summarise()
+View(blueTeamsNames)
+```
+
+```{r}
+#Isolate the unique names of the red teams
+redTeamsNames <- teamsGamesPlayed %>%
+  #df <- unique(teamsGamesPlayed$blueTeamTag)
+  group_by(redTeamTag) %>%
+  summarise()
+View(redTeamsNames)
+#add some NAs for the next chunk:
+redTeamsNames <- rbind( redTeamsNames, data.frame("redTeamTag"=NA))
+redTeamsNames <- rbind( redTeamsNames, data.frame("redTeamTag"=NA))
+```
+
+```{r}
+#combine the two columns into one list of names
+teamNames <- data.frame(teamTags = coalesce(blueTeamsNames$blueTeamTag, redTeamsNames$redTeamTag))
+View(teamNames)
+```
+
+```{r}
+#count of the amount of wins per team on BLUE SIDE
+blueTeamWins <- teamsGamesPlayed %>%
+  filter(bResult == 1) %>%
+  group_by(blueTeamTag) %>%
+  summarise(WinsPerTeam = sum(bResult))
+  View(blueTeamWins)
+```
+
+```{r}
+#count of the amount of wins per team on RED SIDE
+redTeamWins <- teamsGamesPlayed %>%
+  filter(rResult == 1) %>%
+  group_by(redTeamTag) %>%
+  summarise(WinsPerTeam = sum(rResult))
+  View(redTeamWins)
+```
+
+
+```{r}
+#count of the amount of losses per team on BLUE SIDE
+blueTeamLosses <- teamsGamesPlayed %>%
+  filter(bResult == 0) %>%
+  group_by(blueTeamTag) %>%
+  summarise(LossesPerTeam = n())
+  View(blueTeamLosses)
+```
+
+```{r}
+#count of the amount of losses per team on RED SIDE
+redTeamLosses <- teamsGamesPlayed %>%
+  filter(rResult == 0) %>%
+  group_by(redTeamTag) %>%
+  summarise(LossesPerTeam = n())
+  View(redTeamLosses)
+```
+
+
+```{r}
+teamWins <- blueTeamWins %>%
+#<- data.frame(teamTags = teamNames$teamTags, wins = "", losses = "", winLossRatio = "") %>%
+  left_join(redTeamWins, by = c("blueTeamTag" = "redTeamTag")) 
+View(teamWins)
+
+```
+
+```{r}
+teamLosses <- blueTeamLosses %>%
+#<- data.frame(teamTags = teamNames$teamTags, wins = "", losses = "", winLossRatio = "") %>%
+  left_join(redTeamLosses, by = c("blueTeamTag" = "redTeamTag")) 
+View(teamLosses)
+```
+
+```{r}
+teamWinLossRatio <- teamWins %>%
+  left_join(teamLosses, by = c("blueTeamTag" = "blueTeamTag")) %>%
+  mutate(TotalWins = (teamWinLossRatio$WinsPerTeam.x + teamWinLossRatio$WinsPerTeam.y)) %>%
+  mutate(TotalLosses = (teamWinLossRatio$LossesPerTeam.x + teamWinLossRatio$LossesPerTeam.y)) %>%
+  mutate(TotalGames = teamWinLossRatio$TotalWins + teamWinLossRatio$TotalLosses) %>%
+  mutate(WinRatio = teamWinLossRatio$TotalWins / teamWinLossRatio$TotalGames)
+  
+View(teamWinLossRatio)
+```
+
+
+```{r}
+g_WinRatio <- ggplot(data = teamWinLossRatio, aes(x = teamWinLossRatio$blueTeamTag, y = teamWinLossRatio$WinRatio)) + geom_bar(stat = "identity")
+g_WinRatio 
+#+ coord_flip() + scale_y_discrete(expand = c(0, 0), limits = lim) 
+# + ggrepel::geom_label_repel(aes(x = teamWinLossRatio$blueTeamTag), label = rownames(teamWinLossRatio))
+  #theme(text = element_text(size = 10))
+  #scale_x_discrete(aes(x = teamWinLossRatio$blueTeamTag), expand = c(0,0.6))
+```
+
+#So now we finally have the Win/Loss Ratio of pro teams from 2015-2017 (3 Seasons)
+#Now we have to look at games where baron was slain, find the victors of those, and see if it compares
+
+```{r}
+#find the games with Baron results
+
+gamesWithBaronData <- X_LeagueofLegends %>%
+  select(blueTeamTag, bResult, rResult, redTeamTag, bBarons, rBarons)
+View(gamesWithBaronData)
+
+```
+
+```{r}
+#filter out games where no team got baron
+
+gamesWithBaron <- gamesWithBaronData %>%
+filter(!(gamesWithBaron$bBarons == '[]' & gamesWithBaron$rBarons == '[]')) 
+View(gamesWithBaron)
+```
+
+```{r}
+#give each team a baron score, based on how many barons they have slain
+gamesWithBaronScores <- gamesWithBaron %>%
+  #mutate(bBaronsNoBrackets = gsub("\\[|\\]", "", gamesWithBaron$bBarons), rBaronsNoBrackets = gsub("\\[|\\]", "", gamesWithBaron$rBarons))
+mutate(bBaronScore = 0, rBaronScore = 0)
+
+
+#x = strsplit(gamesWithBaronNoBrackets$bBaronsNoBrackets, ", ")
+x = gamesWithBaronScores$bBarons;
+y = gamesWithBaronScores$rBarons;
+
+for(i in 1:length(x))
+{
+  #each time there is a comma, add one to baron score
+  if(x[i] != '[]')
+  {
+    gamesWithBaronScores$bBaronScore[i] = (str_count(x[i], "\\,") + 1)
+  }
+}
+
+for(i in 1:length(y))
+{
+  #each time there is a comma, add one to baron score
+  if(y[i] != '[]')
+  {
+    gamesWithBaronScores$rBaronScore[i] = (str_count(y[i], "\\,") + 1)
+  }
+}
+
+
+View(gamesWithBaronScores)
+```
+
+#now that we have a Baron score for each game, we need to figure give each team a baron score
+
+```{r}
+#count of the amount of barons per team on BLUE SIDE
+blueTeamBarons <- gamesWithBaronScores %>%
+  select(blueTeamTag, bBaronScore) %>%
+  group_by(blueTeamTag) %>%
+  summarise(baronsPerTeam = sum(bBaronScore))
+  View(blueTeamBarons)
+```
+
+```{r}
+#count of the amount of barons per team on RED SIDE
+redTeamBarons <- gamesWithBaronScores %>%
+  select(redTeamTag, rBaronScore) %>%
+  group_by(redTeamTag) %>%
+  summarise(baronsPerTeam = sum(rBaronScore))
+  View(redTeamBarons)
+```
+
+```{r}
+teamBaronScore <- blueTeamBarons %>%
+  left_join(redTeamBarons, by = c("blueTeamTag" = "redTeamTag")) %>%
+  mutate(TotalBarons = (teamBaronScore$baronsPerTeam.x + teamBaronScore$baronsPerTeam.y))
+  #mutate(TotalGames = teamWinLossRatio$TotalGames, baronsPerGame = TotalBarons / TotalGames)
+View(teamBaronScore)
+```
+
+```{r}
+teamsData <- teamBaronScore %>%
+  left_join(teamWinLossRatio, by = c("blueTeamTag" = "blueTeamTag")) %>%
+  mutate(baronsPerGame = TotalBarons / TotalGames)
+View(teamsData)
+```
+
+```{r}
+g_BaronAverage <- ggplot(data = teamsData, aes(x = teamsData$blueTeamTag, y = teamsData$baronsPerGame)) + geom_bar(stat = "identity")
+g_BaronAverage
+```
+
+#so now we can see how many Barons each team yielded from 2015-2017; let's see if that graph compares to their win ratio
+
+```{r}
+g_BaronScores <- ggplot(data = teamBaronScore, aes(x = teamBaronScore$blueTeamTag, y = teamBaronScore$TotalBarons)) + geom_bar(stat = "identity")
+g_BaronScores
+```
+
+#it appears that the two graphs slightly correlate, not strongly though. Obviously, correlation doesn't imply causation, but SKT both has highest win rate AND highest BaronScore, however, there are most likely lurking and cofounding variables: gold, kills, towers, mood, attitude, communication; so it's hard to tell if Baron truly is the cause for victories
+
+```{r}
+#Let's get our bootstrap confidence interval. 95%
+
+rsq <- function(formula, data, indices) 
+{
+  d <- data[indices,] # allows boot to select sample 
+  fit <- lm(formula, data = d)
+  return(summary(fit)$r.square)
+}
+
+results <- boot(data = teamsData, statistic = rsq, 
+  	R=1000, formula = teamsData$WinRatio~teamsData$baronsPerGame)
+
+results 
+plot(results)
+
+boot.ci(results, type = "bca")
+
+```
+
+
