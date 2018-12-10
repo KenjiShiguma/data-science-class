@@ -1,0 +1,45 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+
+```{r, message=FALSE, warning=FALSE}
+library(mdsr)
+library(Lahman)
+View(Pitching)
+View(Master)
+```
+
+```{r}
+#Exercise 4.14
+goodPitchers <- Pitching %>%
+  group_by(playerID) %>%
+  summarise(PitcherWins = sum(W), StrikeOuts = sum(SO)) %>%
+  filter(PitcherWins > 299 & StrikeOuts > 2999) %>%
+  left_join(Master, by = c("playerID" = "playerID") ) %>%
+  select(playerID, PitcherWins, StrikeOuts, nameFirst, nameLast)
+View(goodPitchers)
+```
+
+```{r}
+#Exercise 5.7
+grp <- c("A", "A", "B", "B")
+sex <- c("F", "M", "F", "M")
+meanL <- c(0.22, 0.47, 0.33, 0.55)
+sdL <- c(0.11, 0.33, 0.11, 0.31)
+meanR <- c(0.34, 0.57, 0.40, 0.65)
+sdR <- c(0.08, 0.33, 0.07, 0.27)
+Stuff <- data.frame(grp, sex, meanL, sdL, meanR, sdR) 
+View(Stuff)
+```
+
+```{r}
+Stuff %>%
+gather(key=id, value=number, -grp, -sex) %>%
+  mutate(cat = paste(sex, id, sep = ".")) %>%
+  select(grp, number, cat) %>%
+  spread(key = cat, value = number)
+```
