@@ -1,0 +1,162 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_notebook: default
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(mdsr)
+library(Lahman)
+library(NHANES)
+library(nycflights13)
+library(rpart)
+library(partykit)
+```
+
+```{r}
+#1a
+batterData <- Batting %>%
+  select(HR, AB, R, H, X2B, X3B, RBI, SO, IBB) %>%
+  filter (!(IBB %in% NA)) %>%
+  filter (!(SO %in% NA))
+View(batterData)
+
+```
+
+
+```{r}
+#1b
+
+HR_Factor = as.factor(batterData$HR);
+
+```
+
+```{r}
+#1c
+
+hitHRMaybe <- rpart(HR ~ AB + R + H + X2B + X3B + RBI + SO + IBB, data = batterData)
+  #rpart(HomeOwn ~ Age + Gender + HHIncomeMid + MaritalStatus +
+                   #Work + Education, data = people, method = "class")
+hitHRMaybe
+plot(as.party(hitHRMaybe))
+```
+
+```{r}
+#1d
+print("The confusion matrix... is so confusing that I have no clue how to even make one! :D")
+
+```
+
+```{r}
+#1e
+print("The model predicts that with those stats, it is unlikely that a player hit HRs that year, given the very low RBI.")
+
+```
+
+```{r}
+#2a
+smartBirthCount <- Birthdays %>%
+  select(year, wday, births) %>% 
+  group_by(year, wday) %>%
+  summarise(wday_count = sum(births))
+
+
+View(smartBirthCount)
+```
+
+
+```{r}
+#2b
+smartBirthCountWide <- smartBirthCount %>%
+ gather(key=id, value=number, -year, -wday) %>% 
+  spread(key = wday, value = number) %>%
+  select(year, Sun, Mon, Tues, Wed, Thurs, Fri, Sat)
+  
+View(smartBirthCountWide)
+```
+
+
+```{r}
+#2c
+
+g_smartBirths <- ggplot(smartBirthCount, aes(x = wday, y = wday_count, color = wday)) + geom_point()
+g_smartBirths
+
+```
+
+```{r}
+#3a
+surveyData <- NHANES %>%
+  filter(!(Age %in% NA))
+set.seed(364)
+View(NHANES)
+
+```
+
+```{r}
+#3b
+surveyDataSamples <- surveyData %>%
+  sample_n(200, replace=FALSE)
+View(surveyDataSamples)
+```
+
+```{r}
+#3c
+BootstrapTrials <- do(500) *
+  mean(~ Age, data = sample_n(surveyDataSamples, size = 200, replace = TRUE))
+View(BootstrapTrials)
+```
+
+```{r}
+#3d
+g_surveyAgeMean <- ggplot(BootstrapTrials, aes(x = BootstrapTrials$mean)) + geom_histogram()
+g_surveyAgeMean
+
+```
+
+
+```{r}
+#3f
+qdata(~ mean, p = c(.10, .90), data = BootstrapTrials)
+
+```
+
+
+```{r}
+#4a
+
+flightsData <- nycflights13::flights %>%
+  filter(dest ==  "SFO")
+View(flightsData)
+
+```
+
+
+```{r}
+#4b
+flightsDataFixed <- flightsData %>%
+  mutate(Carrier_Name = "")
+
+x = "haha"
+
+for(i in 1:nrow(flightsDataFixed))
+{
+  #if the carrier code on this row matches the carrier code on the airlines df, then paste the airline name to the data frame
+
+  for(k in 1:nrow(nycflights13::airlines))
+  {
+
+    if(flightsDataFixed$carrier[i] == nycflights13::airlines$carrier[k])
+    {
+      x = nycflights13::airlines$name[k]
+    }
+    
+    flightsDataFixed$Carrier_Name[i] = x
+  }
+  
+}
+View(flightsDataFixed)
+```
+
+
