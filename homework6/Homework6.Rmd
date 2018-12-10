@@ -1,0 +1,46 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r}
+library(mdsr)
+library(Lahman)
+View(Batting)
+```
+
+```{r}
+#Exercise 4.13
+goodPlayers <- Batting %>%
+  group_by(playerID) %>%
+summarise(StolenBases = sum(SB), HomeRuns = sum(HR)) %>%
+filter(StolenBases > 299 & HomeRuns > 299)
+  View(goodPlayers)
+```
+
+```{r}
+#Exercise 4.15
+fiftySeason <- Batting %>%
+  filter(HR > 49) %>%
+  group_by(playerID) %>%
+  group_by(yearID) %>%
+  mutate(BA = sum(H)/sum(AB)) %>%
+  select(playerID, yearID, HR, H, AB, BA) %>%
+  arrange(BA) 
+View(fiftySeason)
+paste(fiftySeason[1,1], " has the lowest batting average.")
+```
+
+```{r}
+#Exercise 5.1
+homeRunsOverYears <- Teams %>% 
+  filter(teamID == "CHN") %>% 
+  select(yearID,HR,HRA) %>% 
+  gather(key = Allowed_Home_Runs, value = Home_Runs, -yearID)
+
+graph <- ggplot(homeRunsOverYears, aes(x= yearID, y = Home_Runs, color = Allowed_Home_Runs)) + geom_point() + geom_smooth(method = "lm", se = FALSE)
+graph
+```
